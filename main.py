@@ -8,9 +8,9 @@ pygame.font.init()
 
 FINISH = pygame.image.load('imgs/finish.png')
 FINISH_MASK = pygame.mask.from_surface(FINISH)
-RED_CAR = scale_image(pygame.image.load('imgs/red-car.png'), 0.4)
-GREEN_CAR = scale_image(pygame.image.load('imgs/green-car.png'), 0.4)
-TRACK_BORDER = scale_image(pygame.image.load('imgs/bestest-track.png'), 0.9)
+RED_CAR = scale_image(pygame.image.load('imgs/red-car.png'), 0.35)
+GREEN_CAR = scale_image(pygame.image.load('imgs/green-car.png'), 0.35)
+TRACK_BORDER = scale_image(pygame.image.load('imgs/track_border.png'), 0.9)
 TRACK_BORDER_MASK = pygame.mask.from_surface(TRACK_BORDER)
 TRACK = scale_image(pygame.image.load('imgs/originaltrack.png'), 0.9)
 
@@ -21,10 +21,10 @@ MAIN_FONT = pygame.font.SysFont("comicsans", 30)
 def main():
     pygame.display.set_caption("2 Player Racing Game")
 
-    images = [(TRACK, (0, 0)), (FINISH, (224, 785)), (TRACK_BORDER, (0, 0))]
+    images = [(TRACK, (0, 0)), (TRACK_BORDER, (0, 0))]
     running = True
-    player_car1 = Player_car1(4, 2)
-    player_car2 = Player_car2(4, 2)
+    player_car1 = Player_car1(4, 4)
+    player_car2 = Player_car2(4, 4)
     game_info = Game_info()
     FPS = 60
     clock = pygame.time.Clock()
@@ -36,11 +36,11 @@ def main():
 
         while not game_info.started:
             blit_text_center(WIN, MAIN_FONT, f'Press any key to start level {game_info.level}')
-            # print(pygame.mouse.get_pos())
             pygame.display.update()
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
+                    return
                 if event.type == pygame.KEYDOWN:
                     game_info.start_level()
 
@@ -57,17 +57,18 @@ def draw(win, images, player_car1, player_car2, game_info):
     for img, pos in images:
         win.blit(img, pos)
 
-    level_text = MAIN_FONT.render(f'Level - {game_info.level}', 1, (255, 255, 255))
-    win.blit(level_text, (10, win.get_height() - 100))
+    # level_text = MAIN_FONT.render(f'Level - {game_info.level}', 1, (255, 255, 255))
+    # win.blit(level_text, (10, win.get_height() - 100))
 
     time_text = MAIN_FONT.render(f'Time - {round(game_info.game_level_time(), 1)}', 1, (255, 255, 255))
-    win.blit(time_text, (10, win.get_height() - 70))
+    win.blit(time_text, (500, win.get_height() - 50))
 
-    player1_vel_text = MAIN_FONT.render(f'Player 1 - Vel: {round(player_car1.vel, 1)}', 1, (255, 255, 255))
-    win.blit(player1_vel_text, (10, win.get_height() - 50))
+    player1_lap_text = MAIN_FONT.render(f'Player 1 - Laps: {player_car1.laps}', 1, (255, 255, 255))
+    win.blit(player1_lap_text, (10, win.get_height() - 80))
 
-    player2_vel_text = MAIN_FONT.render(f'Player 2 - Vel: {round(player_car2.vel, 1)}', 1, (255, 255, 255))
-    win.blit(player2_vel_text, (500, win.get_height() - 50))
+    player2_lap_text = MAIN_FONT.render(f'Player 2 - Laps: {player_car2.laps}', 1, (255, 255, 255))
+    win.blit(player2_lap_text, (920, win.get_height() - 80))
+
 
     player_car1.draw(win)
     player_car2.draw(win)
@@ -83,6 +84,8 @@ class AbstractCar:
         self.img = self.IMG
         self.x, self.y = self.START_POS
         self.acceleration = 0.2
+        self.laps = 0
+        self.crossed_finish = False  # Helps avoid counting multiple times in one crossing
 
     def rotate(self, left=False, right=False):
         if left:
@@ -109,7 +112,7 @@ class AbstractCar:
         self.x -= horizontal
 
     def reduce_speed(self):
-        self.vel = max(self.vel - self.acceleration / 4, 0)
+        self.vel = max(self.vel - self.acceleration / 2, 0)
         self.move()
 
     def collide(self, mask, x=0, y=0):
@@ -118,22 +121,25 @@ class AbstractCar:
         point = mask.overlap(car_mask, offset)
         return point
 
+
     def reset(self):
         self.vel = 0
         self.angle = 270
         self.x, self.y = self.START_POS
+        self.laps = 0
+        self.crossed_finish = False
 
     def bounce(self):
-        self.vel = -self.vel / 4
+        self.vel = -self.vel/1.2 
         self.move()
 
 class Player_car1(AbstractCar):
     IMG = RED_CAR
-    START_POS = (380, 533)
+    START_POS = (440, 535)
 
 class Player_car2(AbstractCar):
     IMG = GREEN_CAR
-    START_POS = (380, 558)
+    START_POS = (440, 558)
 
 class Game_info:
     LEVELS = 8
@@ -165,28 +171,41 @@ class Game_info:
         return time.time() - self.level_start_time
 
 def handle_collision(player_car1, player_car2, game_info):
-    if player_car1.collide(TRACK_BORDER_MASK):
-        player_car1.bounce()
+    for car in [player_car1, player_car2]:
+        if car.collide(TRACK_BORDER_MASK):
+            car.bounce()
 
-    if player_car2.collide(TRACK_BORDER_MASK):
-        player_car2.bounce()
+    # Handle red car
+    finish_1 = player_car1.collide(FINISH_MASK, 415, 531)
+    if finish_1:
+        if not player_car1.crossed_finish:
+            player_car1.laps += 1
+            player_car1.crossed_finish = True
+    else:
+        player_car1.crossed_finish = False
 
-    finish_poi_1 = player_car1.collide(FINISH_MASK, 224, 785)
-    if finish_poi_1:
-        blit_text_center(WIN, MAIN_FONT, 'Player 1 Wins!')
+    # Handle green car
+    finish_2 = player_car2.collide(FINISH_MASK, 415, 531)
+    if finish_2:
+        if not player_car2.crossed_finish:
+            player_car2.laps += 1
+            player_car2.crossed_finish = True
+    else:
+        player_car2.crossed_finish = False
+
+    # Check for winner after 2 laps
+    if player_car1.laps >= 2:
+        blit_text_center(WIN, MAIN_FONT, 'Red car Wins after 2 laps!')
         pygame.display.update()
         pygame.time.wait(3000)
-        game_info.next_level()
         player_car1.reset()
         player_car2.reset()
         return
 
-    finish_poi_2 = player_car2.collide(FINISH_MASK, 224, 785)
-    if finish_poi_2:
-        blit_text_center(WIN, MAIN_FONT, 'Player 2 Wins!')
+    if player_car2.laps >= 2:
+        blit_text_center(WIN, MAIN_FONT, 'Green car Wins after 2 laps!')
         pygame.display.update()
         pygame.time.wait(3000)
-        game_info.next_level()
         player_car1.reset()
         player_car2.reset()
         return
